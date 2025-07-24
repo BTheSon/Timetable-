@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình xử lý thời khóa biểu</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <style>
+        #scheduleTable {
+            border-collapse: collapse;
+            font-size: 24px;
+        }
+        #scheduleTable th, #scheduleTable td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: center;
+            vertical-align: middle;
+            height: 40px;
+        }
+        #scheduleTable th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .time-cell {
+            background-color: #e9ecef;
+            font-weight: bold;
+            width: 80px;
+        }
+        .subject-cell {
+            font-weight: bold;
+            font-size: 22px;
+            padding: 4px;
+            line-height: 1.3;
+        }
+        .room-info {
+            font-size: 18px;
+            color: #666;
+            margin-top: 3px;
+        }
+        .subject-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+        }
+        .subject-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .color-preview {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .merged-cell {
+            border-top: none !important;
+        }
+        .edit-form {
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-4">Trình xử lý thời khóa biểu</h1>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Panel - Input -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Thêm môn học</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="subjectName" class="form-label">Tên môn học:</label>
+                            <input type="text" class="form-control" id="subjectName" placeholder="Nhập tên môn học">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="scheduleInput" class="form-label">Thời khóa biểu:</label>
+                            <textarea class="form-control" id="scheduleInput" rows="6" 
+                                placeholder="Thứ 3, Tiết: 6-9, Tuần: T34, Phòng: 4T.42&#10;Thứ 3, Tiết: 6-10, Tuần: T25->T27, T29->T33, Phòng: 4T.42&#10;Thứ 4, Tiết: 1-2, Tuần: T25->T27, T29->T33, Phòng: A1.404"></textarea>
+                        </div>
+                        
+                        <button class="btn btn-primary w-100 mb-3" onclick="addSubject()">
+                            <i class="bi bi-plus-circle"></i> Thêm môn học
+                        </button>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <label class="form-label">Chiều rộng:</label>
+                                <input type="number" class="form-control form-control-sm" id="tableWidth" value="800" min="400" max="1200">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Chiều cao:</label>
+                                <input type="number" class="form-control form-control-sm" id="tableHeight" value="600" min="300" max="800">
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 mt-3">
+                            <button class="btn btn-secondary" onclick="updateTableSize()">Cập nhật kích thước</button>
+                            <button class="btn btn-success" onclick="downloadImage()">
+                                <i class="bi bi-download"></i> Tải ảnh về
+                            </button>
+                            <button class="btn btn-danger" onclick="clearAll()">
+                                <i class="bi bi-trash"></i> Xóa tất cả
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Danh sách môn học đã thêm -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">Môn học đã thêm (<span id="subjectCount">0</span>)</h6>
+                    </div>
+                    <div class="card-body p-2" id="subjectList" style="max-height: 400px; overflow-y: auto;">
+                        <p class="text-muted text-center m-0">Chưa có môn học nào</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Schedule Table -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Thời khóa biểu</h5>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="table-responsive" style="max-height: 70vh; overflow: auto;">
+                            <table id="scheduleTable" class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="time-cell">Giờ học</th>
+                                        <th>Thứ 2</th>
+                                        <th>Thứ 3</th>
+                                        <th>Thứ 4</th>
+                                        <th>Thứ 5</th>
+                                        <th>Thứ 6</th>
+                                        <th>Thứ 7</th>
+                                        <th>Chủ nhật</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scheduleBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const timeSlots = [
+            "7h00", "8h50", "9h00", "10h40", "11h30", 
+            "13h00", "14h40", "15h00", "16h40", "17h30"
+        ];
+
+        const colors = [
+            '#FFB6C1', '#87CEEB', '#98FB98', '#F0E68C', '#DDA0DD',
+            '#F4A460', '#87CEFA', '#90EE90', '#FFE4B5', '#FFA07A',
+            '#20B2AA', '#9370DB', '#32CD32', '#FF6347', '#4169E1'
+        ];
+
+        let subjects = {};
+        let colorIndex = 0;
+
+        function parseScheduleString(scheduleStr) {
+            const lines = scheduleStr.trim().split('\n');
+            const sessions = [];
+            
+            lines.forEach(line => {
+                if (!line.trim()) return;
+                
+                const parts = line.split(',').map(p => p.trim());
+                let weekday = '', periods = '', weeks = '', room = '';
+                
+                parts.forEach(part => {
+                    if (part.startsWith('Thứ')) {
+                        weekday = part;
+                    } else if (part.startsWith('Tiết:')) {
+                        periods = part.replace('Tiết:', '').trim();
+                    } else if (part.startsWith('Tuần:')) {
+                        weeks = part.replace('Tuần:', '').trim();
+                    } else if (part.startsWith('Phòng:')) {
+                        room = part.replace('Phòng:', '').trim();
+                    }
+                });
+                
+                if (weekday && periods && room) {
+                    const periodMatch = periods.match(/(\d+)-(\d+)/);
+                    if (periodMatch) {
+                        sessions.push({
+                            weekday: weekday,
+                            class_period: {
+                                start: parseInt(periodMatch[1]),
+                                end: parseInt(periodMatch[2])
+                            },
+                            room: room,
+                            weeks: weeks
+                        });
+                    }
+                }
+            });
+            
+            // Lọc bỏ các buổi có tuần đơn lẻ nếu có buổi khác cùng thứ và cùng tiết
+            const filteredSessions = [];
+            const sessionGroups = {};
+            
+            sessions.forEach(session => {
+                const key = `${session.weekday}-${session.class_period.start}-${session.class_period.end}`;
+                if (!sessionGroups[key]) {
+                    sessionGroups[key] = [];
+                }
+                sessionGroups[key].push(session);
+            });
+            
+            Object.values(sessionGroups).forEach(group => {
+                if (group.length > 1) {
+                    const preferred = group.find(s => !s.weeks || s.weeks.includes('->')) || group[0];
+                    filteredSessions.push(preferred);
+                } else {
+                    filteredSessions.push(group[0]);
+                }
+            });
+            
+            return filteredSessions;
+        }
+
+        function addSubject() {
+            const subjectName = document.getElementById('subjectName').value.trim();
+            const scheduleInput = document.getElementById('scheduleInput').value.trim();
+            
+            if (!subjectName) {
+                alert('Vui lòng nhập tên môn học');
+                return;
+            }
+            
+            if (!scheduleInput) {
+                alert('Vui lòng nhập thời khóa biểu');
+                return;
+            }
+            
+            if (subjects[subjectName]) {
+                if (!confirm('Môn học này đã tồn tại. Bạn có muốn cập nhật không?')) {
+                    return;
+                }
+            }
+            
+            try {
+                const sessions = parseScheduleString(scheduleInput);
+                subjects[subjectName] = {
+                    sessions: sessions,
+                    color: colors[colorIndex % colors.length]
+                };
+                colorIndex++;
+                
+                // Clear inputs
+                document.getElementById('subjectName').value = '';
+                document.getElementById('scheduleInput').value = '';
+                
+                updateSubjectList();
+                updateScheduleTable();
+                
+            } catch (error) {
+                alert('Có lỗi khi xử lý thời khóa biểu: ' + error.message);
+                console.error(error);
+            }
+        }
+
+        function removeSubject(subjectName) {
+            if (confirm(`Bạn có chắc muốn xóa môn "${subjectName}"?`)) {
+                delete subjects[subjectName];
+                updateSubjectList();
+                updateScheduleTable();
+            }
+        }
+
+        function editSubject(subjectName) {
+            const editForm = document.getElementById(`edit-${subjectName}`);
+            const isEditing = editForm.style.display === 'block';
+            
+            if (isEditing) {
+                editForm.style.display = 'none';
+            } else {
+                // Hide all other edit forms
+                document.querySelectorAll('.edit-form').forEach(form => {
+                    form.style.display = 'none';
+                });
+                editForm.style.display = 'block';
+                
+                // Populate form with current data
+                const subjectData = subjects[subjectName];
+                document.getElementById(`editName-${subjectName}`).value = subjectName;
+                document.getElementById(`editColor-${subjectName}`).value = subjectData.color;
+                
+                // Convert sessions back to string format
+                const scheduleString = subjectData.sessions.map(session => {
+                    return `${session.weekday}, Tiết: ${session.class_period.start}-${session.class_period.end}, ${session.weeks ? 'Tuần: ' + session.weeks + ', ' : ''}Phòng: ${session.room}`;
+                }).join('\n');
+                document.getElementById(`editSchedule-${subjectName}`).value = scheduleString;
+            }
+        }
+
+        function saveEditSubject(oldName) {
+            const newName = document.getElementById(`editName-${oldName}`).value.trim();
+            const newColor = document.getElementById(`editColor-${oldName}`).value;
+            const newSchedule = document.getElementById(`editSchedule-${oldName}`).value.trim();
+            
+            if (!newName || !newSchedule) {
+                alert('Vui lòng điền đầy đủ thông tin');
+                return;
+            }
+            
+            try {
+                const sessions = parseScheduleString(newSchedule);
+                
+                // If name changed, delete old entry
+                if (newName !== oldName) {
+                    if (subjects[newName] && !confirm(`Môn "${newName}" đã tồn tại. Bạn có muốn ghi đè không?`)) {
+                        return;
+                    }
+                    delete subjects[oldName];
+                }
+                
+                subjects[newName] = {
+                    sessions: sessions,
+                    color: newColor
+                };
+                
+                updateSubjectList();
+                updateScheduleTable();
+                
+            } catch (error) {
+                alert('Có lỗi khi xử lý thời khóa biểu: ' + error.message);
+                console.error(error);
+            }
+        }
+
+        function cancelEditSubject(subjectName) {
+            document.getElementById(`edit-${subjectName}`).style.display = 'none';
+        }
+
+        function changeSubjectColor(subjectName) {
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.value = subjects[subjectName].color;
+            colorInput.onchange = function() {
+                subjects[subjectName].color = this.value;
+                updateSubjectList();
+                updateScheduleTable();
+            };
+            colorInput.click();
+        }
+
+        function updateSubjectList() {
+            const subjectList = document.getElementById('subjectList');
+            const subjectCount = document.getElementById('subjectCount');
+            
+            const subjectNames = Object.keys(subjects);
+            subjectCount.textContent = subjectNames.length;
+            
+            if (subjectNames.length === 0) {
+                subjectList.innerHTML = '<p class="text-muted text-center m-0">Chưa có môn học nào</p>';
+                return;
+            }
+            
+            subjectList.innerHTML = subjectNames.map(name => `
+                <div class="subject-item">
+                    <div class="subject-header">
+                        <div class="d-flex align-items-center">
+                            <div class="color-preview me-2" style="background-color: ${subjects[name].color}" 
+                                 onclick="changeSubjectColor('${name}')" title="Click để đổi màu"></div>
+                            <strong>${name}</strong>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editSubject('${name}')" title="Sửa">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeSubject('${name}')" title="Xóa">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted">${subjects[name].sessions.length} buổi học</small>
+                    
+                    <div id="edit-${name}" class="edit-form">
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm">Tên môn:</label>
+                            <input type="text" class="form-control form-control-sm" id="editName-${name}" value="${name}">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm">Màu sắc:</label>
+                            <input type="color" class="form-control form-control-sm" id="editColor-${name}" value="${subjects[name].color}">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm">Thời khóa biểu:</label>
+                            <textarea class="form-control form-control-sm" id="editSchedule-${name}" rows="3"></textarea>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-success" onclick="saveEditSubject('${name}')">Lưu</button>
+                            <button class="btn btn-sm btn-secondary" onclick="cancelEditSubject('${name}')">Hủy</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateScheduleTable() {
+            const tbody = document.getElementById('scheduleBody');
+            tbody.innerHTML = '';
+            
+            const weekdayMap = {
+                'Thứ 2': 1, 'Thứ 3': 2, 'Thứ 4': 3, 'Thứ 5': 4, 
+                'Thứ 6': 5, 'Thứ 7': 6, 'Chủ nhật': 7
+            };
+            
+            // Tạo ma trận lưu trữ thông tin môn học
+            const schedule = Array(10).fill(null).map(() => Array(8).fill(null));
+            const mergeInfo = Array(10).fill(null).map(() => Array(8).fill(null)); // Lưu thông tin merge
+            
+            // Điền thông tin tất cả môn học vào ma trận
+            Object.keys(subjects).forEach(subjectName => {
+                const subjectData = subjects[subjectName];
+                subjectData.sessions.forEach(session => {
+                    const dayIndex = weekdayMap[session.weekday];
+                    if (dayIndex) {
+                        for (let period = session.class_period.start; period <= session.class_period.end; period++) {
+                            if (period >= 1 && period <= 10) {
+                                const timeSlot = period - 1;
+                                if (!schedule[timeSlot][dayIndex]) {
+                                    schedule[timeSlot][dayIndex] = [];
+                                }
+                                schedule[timeSlot][dayIndex].push({
+                                    subject: subjectName,
+                                    room: session.room,
+                                    color: subjectData.color,
+                                    isStart: period === session.class_period.start,
+                                    isEnd: period === session.class_period.end,
+                                    periods: `${session.class_period.start}-${session.class_period.end}`,
+                                    sessionStart: session.class_period.start,
+                                    sessionEnd: session.class_period.end
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Tính toán merge cells
+            for (let j = 1; j < 8; j++) { // Duyệt các cột (ngày)
+                for (let i = 0; i < 10; i++) { // Duyệt các hàng (tiết)
+                    const sessionInfos = schedule[i][j];
+                    if (sessionInfos && sessionInfos.length === 1) { // Chỉ merge khi có 1 môn duy nhất
+                        const info = sessionInfos[0];
+                        if (info.isStart) {
+                            // Tính rowspan cho session này
+                            const rowspan = info.sessionEnd - info.sessionStart + 1;
+                            mergeInfo[i][j] = { rowspan: rowspan, skip: false };
+                            
+                            // Đánh dấu các cell phía dưới sẽ bị skip
+                            for (let k = i + 1; k < i + rowspan && k < 10; k++) {
+                                mergeInfo[k][j] = { rowspan: 0, skip: true };
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Tạo các hàng của bảng
+            for (let i = 0; i < 10; i++) {
+                const row = document.createElement('tr');
+                
+                // Cột thời gian
+                const timeCell = document.createElement('td');
+                timeCell.className = 'time-cell';
+                timeCell.textContent = timeSlots[i];
+                row.appendChild(timeCell);
+                
+                // Các cột ngày trong tuần
+                for (let j = 1; j < 8; j++) {
+                    const mergeData = mergeInfo[i][j];
+                    
+                    // Skip cell nếu đã được merge từ cell phía trên
+                    if (mergeData && mergeData.skip) {
+                        continue;
+                    }
+                    
+                    const cell = document.createElement('td');
+                    const sessionInfos = schedule[i][j];
+                    
+                    // Set rowspan nếu cần merge
+                    if (mergeData && mergeData.rowspan > 1) {
+                        cell.rowSpan = mergeData.rowspan;
+                    }
+                    
+                    if (sessionInfos && sessionInfos.length > 0) {
+                        // Nếu có nhiều môn học cùng lúc, tạo gradient background
+                        if (sessionInfos.length === 1) {
+                            const info = sessionInfos[0];
+                            cell.style.backgroundColor = info.color;
+                            if (info.isStart) {
+                                cell.innerHTML = `
+                                    <div class="subject-cell">
+                                        <div>${info.subject}</div>
+                                        <div class="room-info">${info.room}</div>
+                                    </div>
+                                `;
+                            }
+                        } else {
+                            // Nhiều môn học cùng lúc - tạo gradient
+                            const colors = sessionInfos.map(info => info.color);
+                            const gradientColors = colors.join(', ');
+                            cell.style.background = `linear-gradient(45deg, ${gradientColors})`;
+                            
+                            const startInfos = sessionInfos.filter(info => info.isStart);
+                            if (startInfos.length > 0) {
+                                cell.innerHTML = startInfos.map(info => `
+                                    <div class="subject-cell" style="margin-bottom: 2px;">
+                                        <div style="font-size: 20px;">${info.subject}</div>
+                                        <div class="room-info">${info.room}</div>
+                                    </div>
+                                `).join('');
+                            }
+                        }
+                    }
+                    
+                    row.appendChild(cell);
+                }
+                
+                tbody.appendChild(row);
+            }
+        }
+
+        function updateTableSize() {
+            const width = document.getElementById('tableWidth').value;
+            const height = document.getElementById('tableHeight').value;
+            const table = document.getElementById('scheduleTable');
+            
+            if (width) table.style.width = width + 'px';
+            if (height) table.style.height = height + 'px';
+        }
+
+        function clearAll() {
+            if (confirm('Bạn có chắc muốn xóa tất cả môn học?')) {
+                subjects = {};
+                colorIndex = 0;
+                updateSubjectList();
+                updateScheduleTable();
+            }
+        }
+
+        function downloadImage() {
+            const table = document.getElementById('scheduleTable');
+            
+            const options = {
+                quality: 1,
+                bgcolor: 'white',
+                style: {
+                    transform: 'scale(1)',
+                    transformOrigin: 'top left'
+                }
+            };
+            
+            domtoimage.toPng(table, options)
+                .then(function (dataUrl) {
+                    const link = document.createElement('a');
+                    link.download = 'thoi-khoa-bieu.png';
+                    link.href = dataUrl;
+                    link.click();
+                })
+                .catch(function (error) {
+                    console.error('Lỗi khi tạo ảnh:', error);
+                    alert('Có lỗi khi tạo ảnh. Vui lòng thử lại.');
+                });
+        }
+
+        // Khởi tạo bảng trống
+        window.onload = function() {
+            updateScheduleTable();
+        };
+
+        // Cho phép nhấn Enter để thêm môn học
+        document.getElementById('scheduleInput').addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'Enter') {
+                addSubject();
+            }
+        });
+    </script>
+</body>
+</html>
